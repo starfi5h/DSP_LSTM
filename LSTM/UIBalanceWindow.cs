@@ -94,7 +94,7 @@ namespace LSTMMod
             MyWindowCtl.OpenWindow(this);
         }
 
-        protected override void _OnCreate()
+        public override void _OnCreate()
         {
             _eventLock = true;
             windowTrans = MyWindowCtl.GetRectTransform(this);
@@ -104,22 +104,22 @@ namespace LSTMMod
             CreateUI();
         }
 
-        protected override void _OnDestroy()
+        public override void _OnDestroy()
         {
         }
 
-        protected override bool _OnInit()
+        public override bool _OnInit()
         {
             //UIStorageGrid srcWin = UIRoot.instance.uiGame.inventory;
             windowTrans.anchoredPosition = new Vector2(-480, 0);
             return true;
         }
 
-        protected override void _OnFree()
+        public override void _OnFree()
         {
         }
 
-        protected override void _OnRegEvent()
+        public override void _OnRegEvent()
         {
             itemButton.onClick += OnSelectItemButtonClick;
             itemResetButton.onClick += OnItemResetButtonClick;
@@ -129,7 +129,7 @@ namespace LSTMMod
 
         }
 
-        protected override void _OnUnregEvent()
+        public override void _OnUnregEvent()
         {
             itemButton.onClick -= OnSelectItemButtonClick;
             itemResetButton.onClick -= OnItemResetButtonClick;
@@ -138,19 +138,19 @@ namespace LSTMMod
             remoteButton.onClick -= OnRemoteButtonClick;
         }
 
-        protected override void _OnOpen()
+        public override void _OnOpen()
         {
 
         }
 
-        protected override void _OnClose()
+        public override void _OnClose()
         {
             supplyListView.Clear();
             demandListView.Clear();
             isPointEnter = false;
         }
 
-        protected override void _OnUpdate()
+        public override void _OnUpdate()
         {
 
             if (VFInput.escape && !UIRoot.instance.uiGame.starmap.active)
@@ -883,7 +883,7 @@ namespace LSTMMod
 
 
 
-        protected override void _OnLateUpdate()
+        public override void _OnLateUpdate()
         {
         }
 
