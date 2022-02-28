@@ -1,6 +1,7 @@
 ﻿
 using BepInEx;
 using BepInEx.Logging;
+using Compatibility;
 using HarmonyLib;
 using System;
 using System.Text;
@@ -71,6 +72,7 @@ namespace LSTMMod
         public bool isPointEnter;
 
         private bool focusPointEnter;
+        private int stage; // 0:not ready 1:requested 2:ready
 
         public bool isFunctionWindow()
         {
@@ -126,7 +128,7 @@ namespace LSTMMod
             planetResetButton.onClick += OnPlanetResetButtonClick;
             localButton.onClick += OnLocalButtonClick;
             remoteButton.onClick += OnRemoteButtonClick;
-
+            NebulaCompat.OnReceiveData += () => { stage = 2; SetUpData(); };
         }
 
         public override void _OnUnregEvent()
@@ -148,6 +150,7 @@ namespace LSTMMod
             supplyListView.Clear();
             demandListView.Clear();
             isPointEnter = false;
+            stage = 0;
         }
 
         public override void _OnUpdate()
@@ -220,6 +223,11 @@ namespace LSTMMod
 
         public void SwitchToGlobal()
         {
+            if (NebulaCompat.IsClient)
+            {
+                stage = 1;
+                NebulaCompat.SendRequest();
+            }
             if (!balanceData.isLocal)
             {
                 return;
@@ -344,6 +352,18 @@ namespace LSTMMod
                     return;
                 }
 
+                if (NebulaCompat.IsClient && stage < 2)
+                {
+                    if (stage == 0)
+                    {
+                        NebulaCompat.SendRequest();
+                        stage = 1;
+                    }
+                    LSTMMod.LSTM.Logger.LogInfo($"stage {stage}");
+                    return;
+                }
+                LSTMMod.LSTM.Logger.LogInfo($"stage 2");
+
                 //planetId あり itemId ありの場合 planetId は無視
 
                 //itemId あり
@@ -359,10 +379,6 @@ namespace LSTMMod
                     {
                         StationComponent cmp = stationPool[i];
                         int length = cmp.storage.Length;
-                        if (length > 5)
-                        {
-                            length -= 1;
-                        }
                         for (int j = 0; j < length; j++)
                         {
                             if(cmp.storage[j].itemId == itemId)
@@ -444,10 +460,6 @@ namespace LSTMMod
                     StationComponent cmp = stationPool[i];
 
                     int length = cmp.storage.Length;
-                    if (length > 5)
-                    {
-                        length -= 1;
-                    }
                     for (int j = 0; j < length; j++)
                     {
                         if ((itemId <= 0 && cmp.storage[j].itemId > 0) || (itemId > 0 && cmp.storage[j].itemId == itemId))

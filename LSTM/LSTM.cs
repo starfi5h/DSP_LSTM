@@ -1,6 +1,7 @@
 ﻿using BepInEx;
 using BepInEx.Logging;
 using BepInEx.Configuration;
+using Compatibility;
 using HarmonyLib;
 //using System;
 //using System.Text;
@@ -12,7 +13,8 @@ using UnityEngine.EventSystems;
 namespace LSTMMod
 {
 
-    [BepInPlugin(__GUID__, __NAME__, "0.3.5")]
+    [BepInPlugin(__GUID__, __NAME__, "0.3.5.1")]
+    [BepInDependency("dsp.nebula-multiplayer-api", BepInDependency.DependencyFlags.SoftDependency)]
     public class LSTM : BaseUnityPlugin
     {
         public const string __NAME__ = "LSTM";
@@ -102,6 +104,9 @@ namespace LSTMMod
             new Harmony(__GUID__).PatchAll(typeof(MyWindowCtl.Patch));
             new Harmony(__GUID__).PatchAll(typeof(TrafficLogic.Patch));
 
+
+            if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey("dsp.nebula-multiplayer-api"))
+                NebulaCompat.Init();
         }
 
         public void Log(string str)
