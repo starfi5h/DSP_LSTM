@@ -345,12 +345,6 @@ namespace LSTMMod
             {
                 int itemId = balanceData.itemId;
                 int planetId = balanceData.planetId;
-                //itemId なし
-                if (itemId <= 0)
-                {
-                    AddFromPlanet(planetId, itemId, balanceData.isLocal);
-                    return;
-                }
 
                 if (NebulaCompat.IsClient && stage < 2)
                 {
@@ -359,10 +353,15 @@ namespace LSTMMod
                         NebulaCompat.SendRequest();
                         stage = 1;
                     }
-                    LSTMMod.LSTM.Logger.LogInfo($"stage {stage}");
                     return;
                 }
-                LSTMMod.LSTM.Logger.LogInfo($"stage 2");
+
+                //itemId なし
+                if (itemId <= 0)
+                {
+                    AddFromPlanet(planetId, itemId, balanceData.isLocal);
+                    return;
+                }
 
                 //planetId あり itemId ありの場合 planetId は無視
 
@@ -437,6 +436,7 @@ namespace LSTMMod
                 factory = GameMain.galaxy.PlanetById(planetId).factory;
                 if (factory == null)
                 {
+                    AddFromGalacticTransport(planetId, itemId, isLocal);
                     return;
                 }
             }
@@ -445,6 +445,7 @@ namespace LSTMMod
                 factory = GameMain.localPlanet?.factory;
                 if (factory == null)
                 {
+                    AddFromGalacticTransport(GameMain.localPlanet?.id ?? 0, itemId, isLocal);
                     return;
                 }
                 tmpPlanetId = GameMain.localPlanet.id;
@@ -482,6 +483,36 @@ namespace LSTMMod
             }
         }
 
+        public void AddFromGalacticTransport(int planetId, int itemId, bool isLocal)
+        {
+            if (isLocal)
+                return;
+
+            StationComponent[] stationPool = UIRoot.instance.uiGame.gameData.galacticTransport.stationPool;
+            int cursor = GameMain.data.galacticTransport.stationCursor;
+            for (int i = 1; i < cursor; i++)
+            {
+                if (stationPool[i] != null && stationPool[i].planetId == planetId)
+                {
+                    StationComponent cmp = stationPool[i];
+
+                    int length = cmp.storage.Length;
+                    for (int j = 0; j < length; j++)
+                    {
+                        if ((itemId <= 0 && cmp.storage[j].itemId > 0) || (itemId > 0 && cmp.storage[j].itemId == itemId))
+                        {
+                            int maxCount;
+                            maxCount = LSTM.RemoteStationMaxItemCount();
+                            if (cmp.isCollector || !cmp.isStellar)
+                            {
+                                maxCount /= 2;
+                            }
+                            AddStore(cmp, j, planetId, cmp.storage[j].itemId, maxCount);
+                        }
+                    }
+                }
+            }
+        }
 
 
         internal List<BalanceListData> _demandList = new List<BalanceListData>(200);
