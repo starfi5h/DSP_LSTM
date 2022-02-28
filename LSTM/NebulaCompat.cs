@@ -13,12 +13,20 @@ namespace Compatibility
 
         public static void Init()
         {
-            if (NebulaModAPI.NebulaIsInstalled)
+            try
             {
-                NebulaModAPI.OnMultiplayerGameStarted += MultiplayerStart;
-                NebulaModAPI.OnMultiplayerGameEnded += MultiplayerEnd;
-                NebulaModAPI.RegisterPackets(Assembly.GetExecutingAssembly());
-                LSTMMod.LSTM.Logger.LogInfo("Nebula compatibility ready");
+                if (NebulaModAPI.NebulaIsInstalled)
+                {
+                    NebulaModAPI.OnMultiplayerGameStarted += MultiplayerStart;
+                    NebulaModAPI.OnMultiplayerGameEnded += MultiplayerEnd;
+                    NebulaModAPI.RegisterPackets(Assembly.GetExecutingAssembly());
+                    LSTMMod.LSTM.Logger.LogInfo("Nebula compatibility ready");
+                }
+            }
+            catch (Exception e)
+            {
+                LSTMMod.LSTM.Logger.LogError("Nebula compatibility failed!");
+                LSTMMod.LSTM.Logger.LogError(e);
             }
         }
 
@@ -36,6 +44,7 @@ namespace Compatibility
 
         public static void SendRequest()
         {
+            // Request for host ILS storage data when client open UI or hit Global button 
             NebulaModAPI.MultiplayerSession.Network.SendPacket(new LSTMRequest());
         }
     }
@@ -151,9 +160,8 @@ namespace Compatibility
                     LSTMMod.LSTM.Logger.LogWarning($"Gid {station.gid} does not in server");
                 }
             }
+            // Refresh UI
             NebulaCompat.OnReceiveData?.Invoke();
-
         }
-
     }
 }

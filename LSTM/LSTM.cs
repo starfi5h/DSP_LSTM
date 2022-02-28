@@ -99,10 +99,11 @@ namespace LSTMMod
             enableTLSmartTransport = Config.Bind("TrafficLogic", "TLSmartTransport", false,
                 "enable TrafficLogic:Smart Transport");
 
-            new Harmony(__GUID__).PatchAll(typeof(Patch));
-            new Harmony(__GUID__).PatchAll(typeof(LSTMStarDistance.Patch));
-            new Harmony(__GUID__).PatchAll(typeof(MyWindowCtl.Patch));
-            new Harmony(__GUID__).PatchAll(typeof(TrafficLogic.Patch));
+            var harmony = new Harmony(__GUID__);
+            harmony.PatchAll(typeof(Patch));
+            harmony.PatchAll(typeof(LSTMStarDistance.Patch));
+            harmony.PatchAll(typeof(MyWindowCtl.Patch));
+            harmony.PatchAll(typeof(TrafficLogic.Patch));
 
 
             if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey("dsp.nebula-multiplayer-api"))
