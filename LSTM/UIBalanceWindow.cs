@@ -23,13 +23,26 @@ namespace LSTMMod
         public int itemId;
         public int planetId;
         public bool isLocal;
-        public BalanceData(int _itemId,  int _planetId, bool _isLocal)
+        public int starId;
+
+        public BalanceData(int _itemId,  int _planetId, bool _isLocal) : this(_itemId, _planetId, _isLocal, 0)
+        {
+        }
+
+        public BalanceData(int _itemId, int _planetId, bool _isLocal, int _starId)
         {
             itemId = _itemId;
             planetId = _planetId;
             isLocal = _isLocal;
+            starId = _starId;
         }
     }
+
+    public struct DisplayMode
+    {
+        public bool useStationName;
+    }
+
     public enum EStoreType
     {
         Normal,
@@ -44,9 +57,9 @@ namespace LSTMMod
         public int planetId;
         public int itemId;
         public int maxCount;
-        public int distance;
+        public int distanceForSort;
         public bool isLocal;
-        public bool useStationName;
+        //public bool useStationName;
         public EStoreType storeType;
     }
 
@@ -59,7 +72,24 @@ namespace LSTMMod
         public BalanceData balanceData;
 
         public int tmpPlanetId;
-        bool useStationName;
+        public int tmpStarId;
+
+
+        bool _useStationNameFallback;
+        public bool UseStationName
+        {
+            get
+            {
+                if (displayModes[currentDisplayMode].useStationName)
+                {
+                    return true;
+                }
+                return _useStationNameFallback;
+            }
+        }
+
+        internal DisplayMode[] displayModes;
+        internal int currentDisplayMode;
 
         public int totalSupplyCount;
         public int totalSupplyCapacity;
@@ -68,6 +98,7 @@ namespace LSTMMod
 
         public UIListView supplyListView;
         public UIListView demandListView;
+        public UIMaterialPicker materialView;
 
         public bool isPointEnter;
 
@@ -79,9 +110,10 @@ namespace LSTMMod
             return true;
         }
 
-        public void SetUpAndOpen(int _itemId, int _planetId, bool _isLocal)
+        public void SetUpAndOpen(int _itemId, int _planetId, bool _isLocal, int _starId = 0)
         {
-            balanceData = new BalanceData(_itemId, _planetId, _isLocal);
+            balanceData = new BalanceData(_itemId, _planetId, _isLocal, _starId);
+            materialView.RefreshWithProduct(balanceData.itemId);
             SetUpData();
 
             UIRoot.instance.uiGame.ShutPlayerInventory();
@@ -101,8 +133,11 @@ namespace LSTMMod
             _eventLock = true;
             windowTrans = MyWindowCtl.GetRectTransform(this);
             windowTrans.sizeDelta = new Vector2(700, 640);
-            balanceData = new BalanceData(0, 0, false);
-            CreateListViews();
+            balanceData = new BalanceData(0, 0, false, 0);
+            displayModes = new DisplayMode[2];
+            displayModes[0].useStationName = false;
+            displayModes[1].useStationName = true;
+            currentDisplayMode = 0;
             CreateUI();
         }
 
@@ -123,12 +158,14 @@ namespace LSTMMod
 
         public override void _OnRegEvent()
         {
+            NebulaCompat.OnReceiveData += () => { stage = 2; SetUpData(); };
             itemButton.onClick += OnSelectItemButtonClick;
             itemResetButton.onClick += OnItemResetButtonClick;
             planetResetButton.onClick += OnPlanetResetButtonClick;
             localButton.onClick += OnLocalButtonClick;
             remoteButton.onClick += OnRemoteButtonClick;
-            NebulaCompat.OnReceiveData += () => { stage = 2; SetUpData(); };
+            starSystemButton.onClick += OnStarSystemButtonClick;
+
         }
 
         public override void _OnUnregEvent()
@@ -138,11 +175,12 @@ namespace LSTMMod
             planetResetButton.onClick -= OnPlanetResetButtonClick;
             localButton.onClick -= OnLocalButtonClick;
             remoteButton.onClick -= OnRemoteButtonClick;
+            starSystemButton.onClick -= OnStarSystemButtonClick;
         }
 
         public override void _OnOpen()
         {
-
+            RefreshstarSystemComboBox();
         }
 
         public override void _OnClose()
@@ -156,7 +194,7 @@ namespace LSTMMod
         public override void _OnUpdate()
         {
 
-            if (VFInput.escape && !UIRoot.instance.uiGame.starmap.active)
+            if (VFInput.escape && !UIRoot.instance.uiGame.starmap.active && !VFInput.inputing)
             {
                 VFInput.UseEscape();
                 base._Close();
@@ -164,6 +202,12 @@ namespace LSTMMod
             if (_eventLock)
             {
                 return;
+            }
+
+            //デフォルトだとスプリッターの形変更などと被るけど、LSTM出したまま建築することもないだろうからとりあえず無視
+            if (LSTM.switchDisplayModeHotkey.Value.IsDown() && !VFInput.inputing)
+            {
+                SwitchDisplayMode();
             }
 
             if (_demandList.Count>0)
@@ -196,18 +240,22 @@ namespace LSTMMod
             }
         }
 
-        public void Filter(int itemId, int planetId = 0)
+        public void Filter(int itemId, int planetId = 0, bool refreshMaterial = true)
         {
             if (itemId != balanceData.itemId)
             {
-                balanceData = new BalanceData(itemId, balanceData.planetId, balanceData.isLocal);
+                balanceData = new BalanceData(itemId, balanceData.planetId, balanceData.isLocal, balanceData.starId);
                 SetUpData();
             }
             //else if (planetId != balanceData.planetId)
             //{
-            //    balanceData = new BalanceData(balanceData.itemId, planetId, balanceData.isLocal);
+            //    balanceData = new BalanceData(balanceData.itemId, planetId, balanceData.isLocal, balanceData.starId);
             //    SetUpData();
             //}
+            if (refreshMaterial)
+            {
+                materialView.RefreshWithProduct(balanceData.itemId);
+            }
         }
 
 
@@ -217,7 +265,33 @@ namespace LSTMMod
             {
                 return;
             }
+            if (balanceData.starId != 0)
+            {
+                tmpStarId = balanceData.starId;
+            }
             balanceData = new BalanceData(balanceData.itemId, balanceData.planetId, !balanceData.isLocal);
+            SetUpData();
+        }
+
+        public void SwitchToStarSystem(int starId = 0)
+        {
+            if (starId != 0)
+            {
+                balanceData.starId = starId;
+            }
+            //if (balanceData.starId != 0 && !balanceData.isLocal)
+            //{
+            //    return;
+            //}
+            if (balanceData.starId == 0 && tmpStarId != 0)
+            {
+                balanceData.starId = tmpStarId;
+            }
+            if (balanceData.starId == 0)
+            {
+                balanceData.starId = GameMain.localStar != null ? GameMain.localStar.id : 0;
+            }
+            balanceData = new BalanceData(balanceData.itemId, balanceData.planetId, false, balanceData.starId);
             SetUpData();
         }
 
@@ -228,12 +302,43 @@ namespace LSTMMod
                 stage = 1;
                 NebulaCompat.SendRequest();
             }
-            if (!balanceData.isLocal)
+            if (balanceData.starId == 0 && !balanceData.isLocal)
             {
                 return;
             }
-            balanceData = new BalanceData(balanceData.itemId, balanceData.planetId, !balanceData.isLocal);
+            if (balanceData.starId != 0)
+            {
+                tmpStarId = balanceData.starId;
+            }
+            balanceData = new BalanceData(balanceData.itemId, balanceData.planetId, false, 0);
             SetUpData();
+        }
+
+        public void SwitchDisplayMode()
+        {
+            DisplayMode currentMode = displayModes[currentDisplayMode];
+            currentDisplayMode++;
+            currentDisplayMode %= displayModes.Length;
+            DisplayMode newMode = displayModes[currentDisplayMode];
+            if (currentMode.useStationName != newMode.useStationName)
+            {
+                for (int i = 0; i < demandListView.ItemCount; i++)
+                {
+                    UIBalanceListEntry e = demandListView.GetItem<UIBalanceListEntry>(i);
+                    if (e != null && e.itemId > 0)
+                    {
+                        e.nameDirty = true;
+                    }
+                }
+                for (int i = 0; i < supplyListView.ItemCount; i++)
+                {
+                    UIBalanceListEntry e = supplyListView.GetItem<UIBalanceListEntry>(i);
+                    if (e != null && e.itemId > 0)
+                    {
+                        e.nameDirty = true;
+                    }
+                }
+            }
         }
 
         public void SetUpData()
@@ -251,9 +356,9 @@ namespace LSTMMod
             SetUpItemUI();
             if (!balanceData.isLocal && balanceData.itemId > 0)
             {
-                _demandList.Sort((a, b) => a.distance - b.distance);
-                _supplyList.Sort((a, b) => a.distance - b.distance);
-                _storageList.Sort((a, b) => a.distance - b.distance);
+                _demandList.Sort((a, b) => a.distanceForSort - b.distanceForSort);
+                _supplyList.Sort((a, b) => a.distanceForSort - b.distanceForSort);
+                _storageList.Sort((a, b) => a.distanceForSort - b.distanceForSort);
             }
             else
             {
@@ -282,7 +387,9 @@ namespace LSTMMod
         internal void SetUpItemUI()
         {
             localButton.highlighted = balanceData.isLocal;
-            remoteButton.highlighted = !balanceData.isLocal;
+            remoteButton.highlighted = !balanceData.isLocal && balanceData.starId == 0;
+            starSystemButton.highlighted = !balanceData.isLocal && balanceData.starId != 0;
+            SetStarSystemBoxHighlight(starSystemButton.highlighted);
 
             if (balanceData.itemId <= 0)
             {
@@ -305,7 +412,14 @@ namespace LSTMMod
             string planetName;
             if (balanceData.itemId > 0 && !balanceData.isLocal)
             {
-                planetName = "(All Planets)".Translate();
+                if (balanceData.starId != 0)
+                {
+                    planetName = GameMain.galaxy.StarById(balanceData.starId).displayName + "空格行星系".Translate();
+                }
+                else
+                {
+                    planetName = "(All Planets)".Translate();
+                }
                 planetResetButton.gameObject.SetActive(false);
             }
             else if (balanceData.planetId <= 0)
@@ -336,7 +450,7 @@ namespace LSTMMod
 
         internal void SetUpItemList()
         {
-            useStationName = false;
+            _useStationNameFallback = false;
             if (balanceData.isLocal)
             {
                 AddFromPlanet(balanceData.planetId, balanceData.itemId, balanceData.isLocal);
@@ -377,7 +491,17 @@ namespace LSTMMod
                     if (stationPool[i] != null && stationPool[i].gid == i) //gid
                     {
                         StationComponent cmp = stationPool[i];
+
+                        if (balanceData.starId != 0 && (cmp.planetId / 100) != balanceData.starId)
+                        {
+                            continue;
+                        }
+
                         int length = cmp.storage.Length;
+                        //if (length == 6)
+                        //{
+                        //    length -= 1;
+                        //}
                         for (int j = 0; j < length; j++)
                         {
                             if(cmp.storage[j].itemId == itemId)
@@ -428,7 +552,7 @@ namespace LSTMMod
 
         public void AddFromPlanet(int planetId, int itemId, bool isLocal)
         {
-            useStationName = true;
+            _useStationNameFallback = true;
 
             PlanetFactory factory = null;
             if (planetId != 0)
@@ -436,19 +560,21 @@ namespace LSTMMod
                 factory = GameMain.galaxy.PlanetById(planetId).factory;
                 if (factory == null)
                 {
-                    AddFromGalacticTransport(planetId, itemId, isLocal);
+                    AddFromPlanetFailedGetFactory(planetId, itemId, isLocal);
                     return;
                 }
+                tmpStarId = planetId / 100;
             }
             else
             {
                 factory = GameMain.localPlanet?.factory;
                 if (factory == null)
                 {
-                    AddFromGalacticTransport(GameMain.localPlanet?.id ?? 0, itemId, isLocal);
+                    AddFromPlanetFailedGetFactory(planetId, itemId, isLocal);
                     return;
                 }
                 tmpPlanetId = GameMain.localPlanet.id;
+                tmpStarId = GameMain.localPlanet.star.id;
             }
 
             PlanetTransport transport = factory.transport;
@@ -461,6 +587,11 @@ namespace LSTMMod
                     StationComponent cmp = stationPool[i];
 
                     int length = cmp.storage.Length;
+                    //warperスロットが存在するかと思ってたけどないっぽい
+                    //if (length == 6)
+                    //{
+                    //    length -= 1;
+                    //}
                     for (int j = 0; j < length; j++)
                     {
                         if ((itemId <= 0 && cmp.storage[j].itemId > 0) || (itemId > 0 && cmp.storage[j].itemId == itemId))
@@ -483,36 +614,11 @@ namespace LSTMMod
             }
         }
 
-        public void AddFromGalacticTransport(int planetId, int itemId, bool isLocal)
+        public void AddFromPlanetFailedGetFactory(int planetId, int itemId, bool isLocal)
         {
-            if (isLocal)
-                return;
-
-            StationComponent[] stationPool = UIRoot.instance.uiGame.gameData.galacticTransport.stationPool;
-            int cursor = GameMain.data.galacticTransport.stationCursor;
-            for (int i = 1; i < cursor; i++)
-            {
-                if (stationPool[i] != null && stationPool[i].planetId == planetId)
-                {
-                    StationComponent cmp = stationPool[i];
-
-                    int length = cmp.storage.Length;
-                    for (int j = 0; j < length; j++)
-                    {
-                        if ((itemId <= 0 && cmp.storage[j].itemId > 0) || (itemId > 0 && cmp.storage[j].itemId == itemId))
-                        {
-                            int maxCount;
-                            maxCount = LSTM.RemoteStationMaxItemCount();
-                            if (cmp.isCollector || !cmp.isStellar)
-                            {
-                                maxCount /= 2;
-                            }
-                            AddStore(cmp, j, planetId, cmp.storage[j].itemId, maxCount);
-                        }
-                    }
-                }
-            }
+            //nothing to do
         }
+
 
 
         internal List<BalanceListData> _demandList = new List<BalanceListData>(200);
@@ -526,11 +632,11 @@ namespace LSTMMod
         {
             List<BalanceListData> list;
             
-            int distance;
+            int distanceForSort;
             if (storeType== EStoreType.Gas)
             {
                 list = _gasList;
-                distance = 0;
+                distanceForSort = 0;
             }
             else
             {
@@ -564,8 +670,20 @@ namespace LSTMMod
                     }
                 }
 
-                float distancef = LSTMStarDistance.StarDistanceFromHere(planetId / 100);
-                distance = (int)(distancef * 100);
+                int localPlanetId = GameMain.localPlanet != null ? GameMain.localPlanet.id : 0;
+                if (localPlanetId == planetId)
+                {
+                    distanceForSort = 0;
+                }
+                else if (localPlanetId / 100 == planetId / 100)
+                {
+                    distanceForSort = planetId % 100;
+                }
+                else
+                {
+                    float distancef = LSTMStarDistance.StarDistanceFromHere(planetId / 100);
+                    distanceForSort = (int)(distancef * 100);
+                }
             }
             BalanceListData d = new BalanceListData()
             {
@@ -575,8 +693,8 @@ namespace LSTMMod
                 itemId = itemId,
                 maxCount = maxCount,
                 isLocal = balanceData.isLocal,
-                useStationName = useStationName,
-                distance = distance,
+                //useStationName = useStationName,
+                distanceForSort = distanceForSort,
                 storeType = storeType,
             };
             list.Add(d);
@@ -608,12 +726,11 @@ namespace LSTMMod
                 e.isLocal = balanceData.isLocal;
                 e.stationMaxItemCount = d.maxCount;
                 e.storeType = d.storeType;
-                e.SetUpValues(useStationName);
+                e.SetUpValues(UseStationName);
 
             }
             return count;
         }
-
 
 
         internal bool RefreshListView(UIListView listView, bool onlyNewlyEmerged = false)
@@ -644,11 +761,73 @@ namespace LSTMMod
                     {
                         return false;
                     }
-
                 }
             }
             return true;
         }
+
+        internal void RefreshstarSystemComboBox()
+        {
+            GameData gameData = UIRoot.instance.uiGame.gameData;
+            List<string> items = starSystemComboBox.Items;
+            List<int> itemsData = starSystemComboBox.ItemsData;
+            items.Clear();
+            itemsData.Clear();
+            items.Add("统计当前星球".Translate());
+            itemsData.Add(0);
+
+            int factoryCount = gameData.factoryCount;
+            for (int i = 0; i < factoryCount; i++)
+            {
+                StarData star = gameData.factories[i].planet.star;
+                if (!itemsData.Contains(star.id))
+                {
+                    string item = star.displayName + "空格行星系".Translate();
+                    itemsData.Add(star.id);
+                    items.Add(item);
+                }
+            }
+        }
+
+        public void SetStarSystemBoxHighlight(bool flag)
+        {
+            if (starSystemBoxBg == null || starSystemBoxMark == null)
+            {
+                return;
+            }
+            if (flag)
+            {
+                starSystemBoxBg.color = new Color(1f, 0.85f, 0.62f, 0.92f);
+                starSystemBoxMark.color = new Color(0.7f, 0.3f, 0.2f, 0.9f);
+            }
+            else
+            {
+                starSystemBoxBg.color = new Color(0.65f, 0.91f, 1f, 0.41f);
+                starSystemBoxMark.color = new Color(1f, 1f, 1f, 0.9f);
+            }
+        }
+
+        public void OnStarSystemBoxItemIndexChange()
+        {
+            if (_eventLock)
+            {
+                return;
+            }
+            int num = starSystemComboBox.itemIndex;
+            if (num < 0) //recursion
+            {
+                return;
+            }
+            int starId = starSystemComboBox.ItemsData[num];
+            if (starId == 0)
+            {
+                starId = GameMain.localStar != null ? GameMain.localStar.id : 0;
+            }
+            tmpStarId = 0;
+            SwitchToStarSystem(starId);
+            starSystemComboBox.itemIndex = -1; //recursion
+        }
+
 
         public Text itemText;
         public UIButton itemButton;
@@ -663,8 +842,13 @@ namespace LSTMMod
 
         public UIButton localButton;
         public UIButton remoteButton;
-        public Text demandText;
-        public Text supplyText;
+        public UIButton starSystemButton;
+        public Text demandLabel;
+        public Text supplyLabel;
+
+        public UIComboBox starSystemComboBox;
+        internal Image starSystemBoxBg;
+        internal Image starSystemBoxMark;
 
 
         public static Sprite defaultItemSprite = null;
@@ -730,6 +914,51 @@ namespace LSTMMod
 
         }
 
+        internal void CreateStarSystemBox()
+        {
+            // Main Button : Image,Button
+            // -Pop sign : Image
+            // -Text : Text
+            // Dropdown List ScrollBox : ScrollRect
+
+            UIStatisticsWindow statisticsWindow = UIRoot.instance.uiGame.statWindow;
+            UIComboBox src = statisticsWindow.productAstroBox;
+            UIComboBox box = GameObject.Instantiate<UIComboBox>(src, windowTrans);
+            box.gameObject.name = "system-box";
+
+
+            RectTransform //boxRect = box.transform as RectTransform;
+            boxRect = Util.NormalizeRectC(box.gameObject);
+            boxRect.anchoredPosition = new Vector2(213f, 220f);
+
+            //boxRect.anchoredPosition = new Vector2(-130, -30);//tmp
+
+            RectTransform btnRect = box.transform.Find("Main Button")?.transform as RectTransform;
+            if (btnRect != null)
+            {
+                btnRect.pivot = new Vector2(1f, 0f);
+                btnRect.anchorMax = Vector2.zero;
+                btnRect.anchorMin = Vector2.zero;
+                btnRect.anchoredPosition = new Vector2(boxRect.sizeDelta.x, 0f);
+                btnRect.sizeDelta = new Vector2(20, boxRect.sizeDelta.y);
+
+                Button btn = btnRect.GetComponent<Button>();
+
+                //0.6549 0.9137 1 0.4118  1 1 1 1 off
+                //(1f, 0.85f, 0.62f, 0.92f) 0 0 0 0.93 on (0.7 0.3 0.2 0.9)
+                starSystemBoxBg = btnRect.GetComponent<Image>();
+                starSystemBoxMark = btnRect.Find("Pop sign")?.GetComponent<Image>();
+                if (starSystemBoxMark != null)
+                {
+                    (starSystemBoxMark.transform as RectTransform).anchoredPosition = new Vector2(-10f, 0f);
+                }
+                btnRect.Find("Text")?.gameObject.SetActive(false);
+            }
+
+            box.DropDownCount = 16;
+            box.onItemIndexChange.AddListener(OnStarSystemBoxItemIndexChange);
+            starSystemComboBox = box;
+        }
 
         internal void CreateUI()
         {
@@ -742,11 +971,12 @@ namespace LSTMMod
                 gasGiantSprite = Util.LoadSpriteResource("Icons/Tech/1606");
             }
 
+            CreateListViews();
+
             GameObject go;
             Transform bg;
             RectTransform rect;
             UIAssemblerWindow assemblerWindow = UIRoot.instance.uiGame.assemblerWindow;
-
 
             //icon
             bg = assemblerWindow.resetButton.transform.parent; //circle-back
@@ -787,25 +1017,25 @@ namespace LSTMMod
 
             go = GameObject.Instantiate(stateText.gameObject);
             go.name = "supply-label";
-            supplyText = go.GetComponent<Text>();
-            supplyText.text = "Supply".Translate();
-            supplyText.color = Util.DSPBlue;
+            supplyLabel = go.GetComponent<Text>();
+            supplyLabel.text = "Supply".Translate();
+            supplyLabel.color = Util.DSPBlue;
             rect = Util.NormalizeRectC(go);
             rect.SetParent(windowTrans, false);
             rect.sizeDelta = new Vector2(80, rect.sizeDelta.y);
-            rect.anchoredPosition = new Vector2(-310f, 168f); //demand
+            //rect.pivot = new Vector2(1f, 0.5f);
+            rect.anchoredPosition = new Vector2(0f, 168f);
 
             go = GameObject.Instantiate(go, windowTrans);
             go.name = "demand-label";
-            demandText = go.GetComponent<Text>();
-            demandText.text = "Demand".Translate();
-            demandText.color = Util.DSPOrange;
+            demandLabel = go.GetComponent<Text>();
+            demandLabel.text = "Demand".Translate();
+            demandLabel.color = Util.DSPOrange;
+            rect = go.transform as RectTransform;
+            rect.anchoredPosition = new Vector2(-310f, 168f);
 
-            rect.pivot = new Vector2(1f, 0.5f); //supply
-            rect.anchoredPosition = new Vector2(310f, 168f); //supply
 
-
-            //local remote button
+            //local remote starSystem button
             UIPowerGeneratorWindow generatorWindow = UIRoot.instance.uiGame.generatorWindow;
             go = GameObject.Instantiate(generatorWindow.gammaMode1Button.gameObject);
             Text txt = go.transform.Find("button-text")?.GetComponent<Text>();
@@ -816,16 +1046,27 @@ namespace LSTMMod
             localButton.tips.tipText = "";
             rect = Util.NormalizeRectC(go);
             rect.SetParent(windowTrans, false);
-            rect.sizeDelta = new Vector2(60f, 32f);
-            rect.anchoredPosition = new Vector2(270f, 240f); //remote
-            txt.text = "Global";
+            rect.sizeDelta = new Vector2(66f, 30f);
+            rect.anchoredPosition = new Vector2(280f, 186f);
+            if (txt != null) txt.text = "Local";
             go.SetActive(true);
 
             go = GameObject.Instantiate(go, windowTrans);
-            go.name = "remote-button";
-            rect.anchoredPosition = new Vector2(270f, 202f); //local
-            txt.text = "Local";
+            go.name = "system-button";
+            rect = go.transform as RectTransform;
+            rect.sizeDelta = new Vector2(46f, 30f); //
+            rect.anchoredPosition = new Vector2(270f, 220f); //(280f, 220f)
+            txt = rect.Find("button-text")?.GetComponent<Text>();
+            if (txt != null) txt.text = "Sys";
+            starSystemButton = go.GetComponent<UIButton>();
 
+            go = GameObject.Instantiate(go, windowTrans);
+            go.name = "remote-button";
+            rect = go.transform as RectTransform;
+            rect.sizeDelta = new Vector2(66f, 30f); //
+            rect.anchoredPosition = new Vector2(280f, 254f);
+            txt = rect.Find("button-text")?.GetComponent<Text>();
+            if(txt != null) txt.text = "Global";
             remoteButton = go.GetComponent<UIButton>();
 
             //name
@@ -879,11 +1120,28 @@ namespace LSTMMod
                 rect.SetParent(windowTrans, false);
                 rect.anchoredPosition = new Vector2(150f, 210f);
             }
+
+            //materialView
+            materialView = UIMaterialPicker.CreateView(this);
+            if (materialView != null)
+            {
+                materialView.window = this;
+                materialView.transform.SetSiblingIndex(0);
+                //RectTransform rect2 = (RectTransform)materialView.gameObject.transform;
+                //rect2.SetParent(windowTrans, false);
+            }
+
+            CreateStarSystemBox();
+
         }
 
         private void OnLocalButtonClick(int obj)
         {
             SwitchToLocal();
+        }
+        private void OnStarSystemButtonClick(int obj)
+        {
+            SwitchToStarSystem();
         }
 
         private void OnRemoteButtonClick(int obj)
@@ -893,12 +1151,13 @@ namespace LSTMMod
 
         private void OnItemResetButtonClick(int obj)
         {
-            balanceData = new BalanceData(0, balanceData.planetId, balanceData.isLocal);
+            balanceData = new BalanceData(0, balanceData.planetId, balanceData.isLocal, balanceData.starId);
+            materialView.RefreshWithProduct(balanceData.itemId);
             SetUpData();
         }
         private void OnPlanetResetButtonClick(int obj)
         {
-            balanceData = new BalanceData(balanceData.itemId, 0, balanceData.isLocal);
+            balanceData = new BalanceData(balanceData.itemId, 0, balanceData.isLocal, 0/* or balanceData.starId?*/); 
             SetUpData();
         }
 
@@ -919,10 +1178,10 @@ namespace LSTMMod
                 return;
             }
             //targetFactory = null;
-            balanceData = new BalanceData(itemProto.ID, balanceData.planetId, balanceData.isLocal);
+            balanceData = new BalanceData(itemProto.ID, balanceData.planetId, balanceData.isLocal, balanceData.starId);
+            materialView.RefreshWithProduct(balanceData.itemId);
             SetUpData();
         }
-
 
 
 

@@ -15,7 +15,15 @@ namespace LSTMMod
         public int index;
         public int itemId;
         public int planetId;
-
+        public string StationName
+        {
+            get
+            {
+                string text = string.IsNullOrEmpty(station.name) ? (station.isStellar ? ("星际站点号".Translate() + station.gid.ToString()) : ("本地站点号".Translate() + station.id.ToString())) : station.name;
+                return text;
+            }
+        }
+        public bool nameDirty;
         public UIBalanceWindow window;
 
 
@@ -45,6 +53,9 @@ namespace LSTMMod
         [SerializeField]
         public Image orderBar;
 
+        [SerializeField]
+        public Image locateImage;
+
         [Header("Colors & Settings")]
         [SerializeField]
         public Color supplyColor;
@@ -69,6 +80,12 @@ namespace LSTMMod
 
         [SerializeField]
         public Color orderNoneTextColor;
+
+        [SerializeField]
+        public Color locateImageColor;
+
+        [SerializeField]
+        public Color locateImageColorLocal;
 
         [SerializeField]
         public Image itemImage;
@@ -160,8 +177,12 @@ namespace LSTMMod
                 btn.tips.offset = new Vector2(18f, -20f);
                 btn.gameObject.SetActive(false);
                 prefab.locateBtn = btn;
+
+                prefab.locateImage = btn.gameObject.transform.Find("icon")?.GetComponent<Image>();
+                prefab.locateImageColor = new Color(0.8f, 0.8f, 0.8f, 0.55f);
+                prefab.locateImageColorLocal = new Color(0.3821f, 0.8455f, 1f, 0.55f);
             }
-            
+
             //filter button
             Sprite sprite = Util.LoadSpriteResource("ui/textures/sprites/icons/filter-icon");
             btn = Util.MakeIconButtonB(sprite, 22);
@@ -262,12 +283,14 @@ namespace LSTMMod
             maxSlider.enabled = false;
             filterBtn.onClick += OnFilterButtonClick;
             locateBtn.onClick += OnLocateButtonClick;
+            locateBtn.onRightClick += OnLocateButtonRightClick;
             locateBtn.gameObject.SetActive(false);
             filterBtn.gameObject.SetActive(false);
         }
 
         public void SetUpValues(bool useStationName)
         {
+            nameDirty = false;
 
             if (storeType == EStoreType.GasStubStorage || storeType == EStoreType.GasStubSupply)
             {
@@ -282,6 +305,15 @@ namespace LSTMMod
                 {
                     itemImage.sprite = itemProto.iconSprite;
                 }
+                int local = GameMain.localPlanet != null ? GameMain.localPlanet.id : 0;
+                if (local == planetId)
+                {
+                    locateImage.color = locateImageColorLocal;
+                }
+                else
+                {
+                    locateImage.color = locateImageColor;
+                }
             }
 
             if (stationMaxItemCount == 0)
@@ -293,37 +325,62 @@ namespace LSTMMod
                 RectTransform rect = (RectTransform)maxSlider.gameObject.transform;
                 rect.sizeDelta = new Vector2(rect.sizeDelta.x / ((float)LSTM.RemoteStationMaxItemCount() / (float)stationMaxItemCount), rect.sizeDelta.y);
             }
-            if (useStationName && station != null)
+
+            SetUpNameText(useStationName);
+
+        }
+
+        public void SetUpNameText(bool useStationName)
+        {
+            //int starId = planetId / 100;
+            int localPlanetId = GameMain.localPlanet != null ? GameMain.localPlanet.id : 0;
+            string distStr;
+
+            if (localPlanetId == planetId)
             {
-                string text = string.IsNullOrEmpty(station.name) ? (station.isStellar ? ("星际站点号".Translate() + station.gid.ToString()) : ("本地站点号".Translate() + station.id.ToString())) : station.name;
-                nameText.text = text;
+                distStr = "";
             }
             else
             {
-                //int starId = planetId / 100;
-                string distStr;
                 float d = LSTMStarDistance.StarDistanceFromHere(planetId / 100);
-                if (d>0)
+                if (d > 0)
                 {
                     distStr = string.Format("   ({0:F1}ly)", d);
                 }
                 else
                 {
-                    distStr = "";
+                    //same star system
+                    distStr = "   (near)";
                 }
+            }
+
+            if (useStationName && station != null)
+            {
+                nameText.text = StationName + distStr;
+            }
+            else
+            {
                 PlanetData planet = GameMain.galaxy.PlanetById(planetId);
                 if (planet != null)
                 {
-                    nameText.text = planet?.displayName + distStr;
+                    nameText.text = planet.displayName + distStr;
                 }
-
+                else
+                {
+                    nameText.text = distStr;
+                }
             }
-
         }
 
 
         public bool RefreshValues(bool shown, bool onlyNewlyEmerged = false)
         {
+            if (nameDirty)
+            {
+                nameDirty = false;
+                SetUpNameText(window.UseStationName);
+            }
+
             if (shown != gameObject.activeSelf)
             {
                 gameObject.SetActive(shown);
@@ -344,11 +401,16 @@ namespace LSTMMod
             int divisor = 1; //画像描画用
             if (storeType == EStoreType.Normal)
             {
-                barMax = (float)stationMaxItemCount;
                 StationStore stationStore = station.storage[index];
                 if (stationStore.itemId != itemId)
                 {
                     return false;
+                }
+                barMax = (float)stationMaxItemCount;
+                //compatibility with some mod?
+                if (barMax < stationStore.max)
+                {
+                    barMax = (float)stationStore.max;
                 }
                 //輸送船
                 string shipCount;
@@ -496,6 +558,11 @@ namespace LSTMMod
             totalOrdered /= divisor;
             barMax /= (float)divisor;
             float barMaxWidth = 200f / ((float)LSTM.RemoteStationMaxItemCount() / barMax);
+            //compatibility with some mod?
+            if (barMaxWidth > 200f)
+            {
+                barMaxWidth = 200f;
+            }
             float num2 = (float)count / barMax;
             float num3 = (float)totalOrdered / barMax;
             int num4 = (int)(barMaxWidth * num2 + 0.49f);
@@ -549,10 +616,12 @@ namespace LSTMMod
 
         private void OnLocateButtonClick(int obj)
         {
-
             LSTM.LocateStation(station, planetId);
         }
-
+        private void OnLocateButtonRightClick(int obj)
+        {
+            LSTM.OpenStationWindow(station, planetId);
+        }
         private void OnFilterButtonClick(int obj)
         {
             window.Filter(itemId, 0);

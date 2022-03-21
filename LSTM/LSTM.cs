@@ -13,8 +13,7 @@ using UnityEngine.EventSystems;
 namespace LSTMMod
 {
 
-    [BepInPlugin(__GUID__, __NAME__, "0.3.5.1")]
-    [BepInDependency("dsp.nebula-multiplayer-api", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInPlugin(__GUID__, __NAME__, "0.5.0")]
     public class LSTM : BaseUnityPlugin
     {
         public const string __NAME__ = "LSTM";
@@ -37,12 +36,16 @@ namespace LSTMMod
         public static LSTMNavi navi = null;
         public static UIBalanceWindow _win;
         public static ConfigEntry<KeyboardShortcut> mainWindowHotkey;
+        public static ConfigEntry<KeyboardShortcut> switchDisplayModeHotkey;
 
         public static ConfigEntry<bool> dropSorterKeyEracesNavi;
         public static ConfigEntry<bool> showButtonInStationWindow;
         public static ConfigEntry<bool> showButtonInStatisticsWindow;
+        public static ConfigEntry<bool> showStatInStatisticsWindow;
         public static ConfigEntry<bool> actAsStandardPanel;
         public static ConfigEntry<bool> indicatesWarperSign;
+        public static ConfigEntry<bool> reactClosePanelKeyE;
+        public static ConfigEntry<bool> showMaterialPicker;
 
         public static ConfigEntry<bool> enableTLRemoteCluster;
         public static ConfigEntry<bool> enableTLLocalCluster;
@@ -54,6 +57,7 @@ namespace LSTMMod
         public static ConfigEntry<bool> enableTLRemoteDemandDelay;
         public static ConfigEntry<bool> enableTLSmartTransport;
         
+        public static ConfigEntry<bool> _showStatInStatisticsWindow;
 
         new internal static ManualLogSource Logger;
 
@@ -69,16 +73,26 @@ namespace LSTMMod
 
             mainWindowHotkey = Config.Bind("Keyboard Shortcuts", "mainWindowHotkey", KeyboardShortcut.Deserialize("T + LeftControl"),
                 "Hotkey to open/close LSTM window");
+            switchDisplayModeHotkey = Config.Bind("Keyboard Shortcuts", "switchDisplayModeHotkey", KeyboardShortcut.Deserialize("Tab"),
+                "Hotkey to switch display mode of LSTM window");
             showButtonInStationWindow = Config.Bind("Interface", "showButtonInStationWindow", true,
                 "Add open LSTM button to Station Window (needs restart)");
             showButtonInStatisticsWindow = Config.Bind("Interface", "showButtonInStatisticsWindow", false,
-                "Add open LSTM button to Statistics Window (needs restart)");
+                "Add open LSTM button to Statistics Window");
+            showStatInStatisticsWindow = Config.Bind("Interface", "showStatInStatisticsWindow", true,
+                "Add station stat to Statistics Window");
+            
+
             actAsStandardPanel = Config.Bind("Interface", "actAsStandardPanel", true,
                 "true: close with other panels by esc key. false: one more esc needed");
             dropSorterKeyEracesNavi = Config.Bind("Keyboard Shortcuts", "dropSorterKeyEracesNavi", false,
                 "clear navi line when \"Remove Copied Sorter Previews\" shortcut is pressed");
             indicatesWarperSign = Config.Bind("Interface", "indicatesWarperSign", false,
                 "show sign on the list if station has warper.");
+            reactClosePanelKeyE = Config.Bind("Keyboard Shortcuts", "reactClosePanelKeyE", true,
+                "close window when close panel key(E) is pressed.");
+            showMaterialPicker = Config.Bind("Interface", "showMaterialPicker", true,
+                "Add Material Picker for quick item switching to LSTM window");
 
             enableTLRemoteCluster = Config.Bind("TrafficLogic", "TLRemoteCluster", false,
                 "enable TrafficLogic:Remote Cluster");
@@ -99,12 +113,14 @@ namespace LSTMMod
             enableTLSmartTransport = Config.Bind("TrafficLogic", "TLSmartTransport", false,
                 "enable TrafficLogic:Smart Transport");
 
-            var harmony = new Harmony(__GUID__);
-            harmony.PatchAll(typeof(Patch));
-            harmony.PatchAll(typeof(LSTMStarDistance.Patch));
-            harmony.PatchAll(typeof(MyWindowCtl.Patch));
-            harmony.PatchAll(typeof(TrafficLogic.Patch));
+            _showStatInStatisticsWindow = Config.Bind("Z", "_showStatInStatisticsWindow", true,
+                "Internal setting. Do not change directly");
 
+            new Harmony(__GUID__).PatchAll(typeof(Patch));
+            new Harmony(__GUID__).PatchAll(typeof(LSTMStarDistance.Patch));
+            new Harmony(__GUID__).PatchAll(typeof(MyWindowCtl.Patch));
+            new Harmony(__GUID__).PatchAll(typeof(TrafficLogic.Patch));
+            new Harmony(__GUID__).PatchAll(typeof(UIStatisticsWindowAgent.Patch));
 
             if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey("dsp.nebula-multiplayer-api"))
                 NebulaCompat.Init();
@@ -138,6 +154,17 @@ namespace LSTMMod
             _win.SetUpAndOpen(0, 0, true);
         }
 
+        public static void OpenStationWindow(StationComponent station, int planetId)
+        {
+            if (GameMain.mainPlayer.factory == null || planetId != GameMain.mainPlayer.factory.planetId || station == null)
+            {
+                return;
+            }
+
+            _win.keepOpen = true;
+            GameMain.mainPlayer.controller.actionInspect.SetInspectee(EObjectType.Entity, station.entityId);
+            _win.keepOpen = false;
+        }
 
         public static void LocateStation(StationComponent station, int planetId)
         {
@@ -302,9 +329,21 @@ namespace LSTMMod
             {
                 return;
             }
+
+            if (VFInput.inputing)
+            {
+                return;
+            }
             if (mainWindowHotkey.Value.IsDown())
             {
                 ToggleBalanceWindow();
+            }
+            else if (reactClosePanelKeyE.Value && VFInput._closePanelE)
+            {
+                if (_win.active)
+                {
+                    _win._Close();
+                }
             }
         }
 
@@ -341,13 +380,13 @@ namespace LSTMMod
                 {
                     //before _OnCreate
                     //storageUIPrefabに付けたほうが効率良いけどUIBalanceListEntryでも使う
-                    //UIStationStorageParasite.MakeUIStationStorageParasite(stationWindow.storageUIPrefab);
+                    //UIStationStorageAgent.MakeUIStationStorageAgent(stationWindow.storageUIPrefab);
 
                     //after _OnCreate
                     UIStationStorage[] storageUIs = AccessTools.FieldRefAccess<UIStationWindow, UIStationStorage[]>(stationWindow, "storageUIs");
                     for (int i = 0; i < storageUIs.Length; i++)
                     {
-                        UIStationStorageParasite.MakeUIStationStorageParasite(storageUIs[i]);
+                        UIStationStorageAgent.MakeUIStationStorageAgent(storageUIs[i]);
                     }
                 }
             }
@@ -375,9 +414,8 @@ namespace LSTMMod
             [HarmonyPrefix, HarmonyPatch(typeof(UIGame), "_OnCreate")]
             public static void UIGame__OnCreate_Prefix()
             {
-                if (LSTM.showButtonInStatisticsWindow.Value)
-                {
-                    ProductEntryParasite.AddButtonToStatisticsWindow();
+                if (!_initialized) {
+                    UIStatisticsWindowAgent.PreCreate();
                 }
             }
 
@@ -391,7 +429,7 @@ namespace LSTMMod
 
                     AddButtonToStarmap();
                     AddButtonToStationWindow();
-
+                    UIStatisticsWindowAgent.PostCreate();
                 }
             }
 
@@ -456,7 +494,7 @@ namespace LSTMMod
             {
                 if (LSTM.showButtonInStationWindow.Value)
                 {
-                    __instance.GetComponent<UIStationStorageParasite>()?.RefreshValues();
+                    __instance.GetComponent<UIStationStorageAgent>()?.RefreshValues();
                 }
             }
 
@@ -492,66 +530,8 @@ namespace LSTMMod
 
     }
 
-    public class ProductEntryParasite : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
-    {
-        [SerializeField]
-        public UIProductEntry productEntry;
-        [SerializeField]
-        public Button showBalanceButton;
 
-        void Start()
-        {
-            showBalanceButton?.onClick.AddListener(ShowBalanceButtonClicked);
-        }
-
-        public void ShowBalanceButtonClicked()
-        {
-            int itemId = productEntry.entryData.itemId;
-            if (itemId > 0)
-            {
-                //VFAudio.Create("ui-click-0", null, Vector3.zero, true, 2);
-                LSTM.OpenBalanceWindow(itemId);
-            }
-        }
-
-        public void OnPointerEnter(PointerEventData eventData)
-        {
-            if (LSTM.showButtonInStatisticsWindow.Value)
-            {
-                showBalanceButton.gameObject.SetActive(true);
-            }
-        }
-        public void OnPointerExit(PointerEventData _eventData)
-        {
-            showBalanceButton.gameObject.SetActive(false);
-        }
-
-        public static void AddButtonToStatisticsWindow()
-        {
-            //UIStatisticsWindow _OnCreate() より先に
-            UIStatisticsWindow statisticsWindow = UIRoot.instance.uiGame.statWindow;
-            UIProductEntry productEntry = statisticsWindow.productEntry;
-            UIButton btn = Util.MakeSmallTextButton("LSTM", 38f, 20f);
-            RectTransform rect = Util.NormalizeRectD(btn.gameObject);
-            rect.SetParent(productEntry.transform, false);
-            rect.anchoredPosition = new Vector3(6f, -6f);
-            rect.localScale = Vector3.one;
-            btn.gameObject.SetActive(false);
-            ProductEntryParasite p = productEntry.gameObject.AddComponent<ProductEntryParasite>();
-            p.productEntry = productEntry;
-            p.showBalanceButton = btn.button;
-
-            //OnPointerEnter OnPointerExit のため
-            Image img = productEntry.gameObject.AddComponent<Image>();
-            img.color = Color.clear;
-            img.alphaHitTestMinimumThreshold = 0f;
-        }
-
-    }
-
-
-
-    public class UIStationStorageParasite : MonoBehaviour
+    public class UIStationStorageAgent : MonoBehaviour
     {
         public UIStationStorage uiStorage;
         
@@ -619,12 +599,12 @@ namespace LSTMMod
             LSTM.OpenBalanceWindow(cmp, index, isLocal, stationWindow.factory);
         }
 
-        public static UIStationStorageParasite MakeUIStationStorageParasite(UIStationStorage stationStorage)
+        public static UIStationStorageAgent MakeUIStationStorageAgent(UIStationStorage stationStorage)
         {
             GameObject parent = stationStorage.gameObject;
             GameObject go = new GameObject("lstm-open-barance-button");
 
-            UIStationStorageParasite parasite = parent.AddComponent<UIStationStorageParasite>();
+            UIStationStorageAgent agent = parent.AddComponent<UIStationStorageAgent>();
             go.transform.parent = parent.transform;
             go.transform.localPosition = new Vector3(523, -60, 0);
             go.transform.localScale = new Vector3(1, 1, 1);
@@ -632,24 +612,24 @@ namespace LSTMMod
             //rect.sizeDelta = new Vector2(16, 32);
 
             Sprite s = Util.LoadSpriteResource("ui/textures/sprites/icons/resume-icon");
-            parasite.remoteBtn = Util.MakeIconButton(go.transform, s, 0, 0);
-            parasite.localBtn = Util.MakeIconButton(go.transform, s, 0, 32);
+            agent.remoteBtn = Util.MakeIconButton(go.transform, s, 0, 0);
+            agent.localBtn = Util.MakeIconButton(go.transform, s, 0, 32);
 
-            if (parasite.localBtn != null && parasite.remoteBtn != null)
+            if (agent.localBtn != null && agent.remoteBtn != null)
             {
 
-                parasite.localBtn.gameObject.name = "lstm-open-barance-local";
-                parasite.remoteBtn.gameObject.name = "lstm-open-barance-remote";
+                agent.localBtn.gameObject.name = "lstm-open-barance-local";
+                agent.remoteBtn.gameObject.name = "lstm-open-barance-remote";
                 //btn.uiBtn.gameObject.transform.Find("bg").gameObject.SetActive(false); //or destroy
                 //btn.uiBtn.gameObject.transform.Find("sd").gameObject.SetActive(false);
-                parasite.uiStorage = stationStorage;
+                agent.uiStorage = stationStorage;
             }
             else
             {
-                LSTM.instance.Log("UIStationStorageParasite is null");
+                LSTM.instance.Log("UIStationStorageAgent is null");
             }
 
-            return parasite;
+            return agent;
         }
     }
 }
