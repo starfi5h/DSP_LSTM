@@ -1,5 +1,6 @@
 ﻿//using System;
 //using System.Text;
+using Compatibility;
 using HarmonyLib;
 using System.Collections.Generic;
 using UnityEngine;
@@ -84,6 +85,10 @@ namespace LSTMMod
             else
             {
                 ShowBalance();
+                if (NebulaCompat.IsClient)
+                {
+                    NebulaCompat.SendRequest();
+                }
             }
         }
 
@@ -243,6 +248,15 @@ namespace LSTMMod
                 if (instance != null && instance.window.isProductionTab)
                 {
                     instance.OnPostUpdate();
+                }
+            }
+
+            [HarmonyPostfix, HarmonyPatch(typeof(UIStatisticsWindow), "_OnOpen")]
+            public static void UIStatisticsWindow__OnOpen_Postfix()
+            {
+                if (instance != null && NebulaCompat.IsClient)
+                {
+                    NebulaCompat.SendRequest();
                 }
             }
         }
@@ -506,13 +520,15 @@ namespace LSTMMod
         public long supplyMax;
         public long supplyCount;
 
-        
         public StationStorageScanner(int itemId)
         {
             this.itemId = itemId;
         }
         public bool TryAddStorage(StationComponent s)
         {
+            if (s.storage == null) //Nebula client ILS data is not ready yet
+                return false;
+
             for (int i = 0; i < s.storage.Length; i++)
             {
                 if (itemId == s.storage[i].itemId)
