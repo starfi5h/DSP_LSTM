@@ -12,7 +12,7 @@ using UnityEngine.EventSystems;
 
 namespace LSTMMod
 {
-
+    [BepInDependency("dsp.nebula-multiplayer-api", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInPlugin(__GUID__, __NAME__, "0.5.0")]
     public class LSTM : BaseUnityPlugin
     {
