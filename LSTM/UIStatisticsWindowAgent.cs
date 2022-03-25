@@ -120,10 +120,7 @@ namespace LSTMMod
             p.statBalance.transform.SetParent(productEntry.transform, false);
             //p.demandBalance.leftBar.color = p.demandBalance.demandColor;
             (p.statBalance.gameObject.transform as RectTransform).anchoredPosition = new Vector2(458, 0);
-            p.statBalance.gameObject.SetActive(true);
-
-            //test
-            p.graphTrans.sizeDelta = new Vector2(p.graphTrans.sizeDelta.x - 60, p.graphTrans.sizeDelta.y);
+            p.statBalance.gameObject.SetActive(false);
 
         }
 
@@ -276,7 +273,7 @@ namespace LSTMMod
 
         public void ShowBalanceButtonClicked()
         {
-            int itemId = productEntry.entryData.itemId;
+            int itemId = productEntry?.entryData?.itemId ?? 0;
             if (itemId > 0)
             {
                 //VFAudio.Create("ui-click-0", null, Vector3.zero, true, 2);
@@ -311,7 +308,7 @@ namespace LSTMMod
 
         public bool NeedToUpdate(int frame)
         {
-            int currentItemId = productEntry.entryData.itemId;
+            int currentItemId = productEntry?.entryData?.itemId ?? 0;
             if (frame > nextUpdateFrame || itemId != currentItemId)
             {
                 itemId = currentItemId;
@@ -488,8 +485,8 @@ namespace LSTMMod
             img = sepSrc.AddComponent<Image>();
             img.color = new Color(0.9f, 0.9f, 0.9f, 0.1f);
 
-            Util.MakeGameObject<Image>(go.transform, sepSrc, 77f, 24f, 40f, 0.8f, false, true);
-            Util.MakeGameObject<Image>(go.transform, sepSrc, 77f, 80f, 40f, 0.8f, false, true);
+            Util.MakeGameObject<Image>(go.transform, sepSrc, 80f, 24f, 36f, 0.8f, false, true);
+            Util.MakeGameObject<Image>(go.transform, sepSrc, 80f, 80f, 36f, 0.8f, false, true);
             Object.Destroy(sepSrc);
 
             return prefab;
