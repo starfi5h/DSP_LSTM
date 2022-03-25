@@ -130,10 +130,10 @@ namespace LSTMMod
             UIStatisticsWindow statisticsWindow = UIRoot.instance.uiGame.statWindow;
             UIStatisticsWindowAgent agent = statisticsWindow.gameObject.AddComponent<UIStatisticsWindowAgent>();
             agent.window = statisticsWindow;
-            agent.entriesLen = AccessTools.FieldRefAccess<UIStatisticsWindow, int>(statisticsWindow, "entriesLen");
+            agent.entriesLen = statisticsWindow.entriesLen;
             agent.entries = new UIProductEntryAgent[agent.entriesLen];
 
-            UIProductEntry[] ary = AccessTools.FieldRefAccess<UIStatisticsWindow, UIProductEntry[]>(statisticsWindow, "entries");
+            UIProductEntry[] ary = statisticsWindow.entries;
             for (int i = 0; i < agent.entriesLen; i++)
             {
                 agent.entries[i] = ary[i]?.gameObject.GetComponent<UIProductEntryAgent>();
