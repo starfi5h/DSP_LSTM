@@ -12,7 +12,7 @@ using UnityEngine.EventSystems;
 
 namespace LSTMMod
 {
-
+    [BepInDependency("dsp.nebula-multiplayer-api", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInPlugin(__GUID__, __NAME__, "0.5.0")]
     public class LSTM : BaseUnityPlugin
     {
@@ -282,8 +282,8 @@ namespace LSTMMod
                 UIReplicatorWindow repWin = target.gameObject.GetComponentInParent<UIReplicatorWindow>();
                 if (repWin != null)
                 {
-                    int mouseRecipeIndex = AccessTools.FieldRefAccess<UIReplicatorWindow, int>(repWin, "mouseRecipeIndex");
-                    RecipeProto[] recipeProtoArray = AccessTools.FieldRefAccess<UIReplicatorWindow, RecipeProto[]>(repWin, "recipeProtoArray");
+                    int mouseRecipeIndex = repWin.mouseRecipeIndex;
+                    RecipeProto[] recipeProtoArray = repWin.recipeProtoArray;
                     if (mouseRecipeIndex < 0)
                     {
                         return 0;
@@ -299,9 +299,9 @@ namespace LSTMMod
                 UIStorageGrid grid = target.gameObject.GetComponentInParent<UIStorageGrid>();
                 if (grid != null)
                 {
-                    StorageComponent storage = AccessTools.FieldRefAccess<UIStorageGrid, StorageComponent>(grid, "storage");
-                    int mouseOnX = AccessTools.FieldRefAccess<UIStorageGrid, int>(grid, "mouseOnX");
-                    int mouseOnY = AccessTools.FieldRefAccess<UIStorageGrid, int>(grid, "mouseOnY");
+                    StorageComponent storage = grid.storage;
+                    int mouseOnX = grid.mouseOnX;
+                    int mouseOnY = grid.mouseOnY;
                     if (mouseOnX >= 0 && mouseOnY >= 0 && storage != null)
                     {
                         int num6 = mouseOnX + mouseOnY * grid.colCount;
@@ -383,7 +383,7 @@ namespace LSTMMod
                     //UIStationStorageAgent.MakeUIStationStorageAgent(stationWindow.storageUIPrefab);
 
                     //after _OnCreate
-                    UIStationStorage[] storageUIs = AccessTools.FieldRefAccess<UIStationWindow, UIStationStorage[]>(stationWindow, "storageUIs");
+                    UIStationStorage[] storageUIs = stationWindow.storageUIs;
                     for (int i = 0; i < storageUIs.Length; i++)
                     {
                         UIStationStorageAgent.MakeUIStationStorageAgent(storageUIs[i]);
