@@ -371,7 +371,8 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>COPY $(TargetPath) "D:\Program Files (x86)\Steam\steamapps\common\Dyson Sphere Program\BepInEx\plugins"</PostBuildEvent>
+    <PostBuildEvent>
+    </PostBuildEvent>
   </PropertyGroup>
   <Import Project="..\packages\BepInEx.Core.5.4.17\build\BepInEx.Core.targets" Condition="Exists('..\packages\BepInEx.Core.5.4.17\build\BepInEx.Core.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
