@@ -773,17 +773,18 @@ namespace LSTMMod
             List<int> itemsData = starSystemComboBox.ItemsData;
             items.Clear();
             itemsData.Clear();
-            items.Add("统计当前星球".Translate());
+            items.Add("当前行星系".Translate());
             itemsData.Add(0);
 
-            int factoryCount = gameData.factoryCount;
-            for (int i = 0; i < factoryCount; i++)
+            foreach (StationComponent station in gameData.galacticTransport.stationPool)
             {
-                StarData star = gameData.factories[i].planet.star;
-                if (!itemsData.Contains(star.id))
+                if (station == null)
+                    continue;
+                int starId = station.planetId / 100;
+                if (!itemsData.Contains(starId))
                 {
-                    string item = star.displayName + "空格行星系".Translate();
-                    itemsData.Add(star.id);
+                    string item = gameData.galaxy.StarById(starId).displayName + "空格行星系".Translate();
+                    itemsData.Add(starId);
                     items.Add(item);
                 }
             }
