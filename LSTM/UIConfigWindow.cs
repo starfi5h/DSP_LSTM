@@ -167,7 +167,8 @@ namespace LSTMMod
 
             //Traffic Logic tab
             tab2 = AddTab("Traffic Logic", out tabBtn2);
-            base_ = tab2;
+            /*
+            base_ = tab2;            
             y_ = 0f;
             x_ = 0f;
             rect = MyCheckBox.CreateCheckBox(LSTM.enableOneTimeDemand, "One-time demand");
@@ -215,6 +216,7 @@ namespace LSTMMod
             txt = CreateText("* Distance/Capacity Balance will be forced off when Smart Transport is on");
             txt.fontSize = 15;
             AddElement(txt.transform as RectTransform, 26f);
+            */
 
             OnTabButtonClick(1);
         }
