@@ -158,7 +158,7 @@ namespace LSTMMod
             harmony.PatchAll(typeof(Patch));
             harmony.PatchAll(typeof(LSTMStarDistance.Patch));
             harmony.PatchAll(typeof(MyWindowCtl.Patch));
-            harmony.PatchAll(typeof(TrafficLogic.Patch));
+            //harmony.PatchAll(typeof(TrafficLogic.Patch));
             harmony.PatchAll(typeof(UIStatisticsWindowAgent.Patch));
             harmony.PatchAll(typeof(ConstructionPoint.Patch));
             harmony.PatchAll(typeof(UIStationStorageAgent.Patch));
